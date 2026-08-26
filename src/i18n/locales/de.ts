@@ -68,6 +68,26 @@ export const de = {
 			clearPersonalAccessToken: "Persönliches Zugriffstoken löschen",
 			validate: "Validieren",
 		},
+		gitlabSection: {
+			heading: "GitLab",
+			host: {
+				name: "GitLab-Host",
+				desc: "Basis-URL deiner GitLab-Instanz, z. B. http://gitlab.example.com. Wird zur Validierung des GitLab-Zugriffstokens verwendet.",
+				placeholder: "http://gitlab.example.com",
+			},
+			personalAccessToken: {
+				name: "GitLab-Zugriffstoken",
+				desc: {
+					prependText:
+						"Persönliches Zugriffstoken zum Installieren von Plugins und Themes aus GitLab-Repositorys (Scope: read_api). Erstelle es in ",
+					linkText: "deinen GitLab-Token-Einstellungen",
+					appendText: ", füge es zum Obsidian-Schlüsselspeicher hinzu und wähle es hier aus.",
+				},
+			},
+			clearPersonalAccessToken: "GitLab-Zugriffstoken löschen",
+			validate: "Validieren",
+			noHostConfigured: "Kein GitLab-Host konfiguriert. Lege oben den GitLab-Host fest oder füge zuerst ein GitLab-Repository hinzu.",
+		},
 		betaPluginList: {
 			heading: "Beta-Plugin-Liste",
 			filterPlaceholder: "Plugins filtern",
@@ -119,17 +139,20 @@ export const de = {
 		},
 		heading: {
 			changePluginVersion: "Plugin-Version ändern: ",
-			githubRepositoryForBetaPlugin: "GitHub-Repository für das Beta-Plugin:",
+			githubRepositoryForBetaPlugin: "GitHub- oder GitLab-Repository für das Beta-Plugin:",
 		},
 		repository: {
 			label: "Repository",
-			placeholder: "Repository (Beispiel: https://GitHub.com/githubusername/repository-name)",
-			enterAddressToValidate: "Gib eine GitHub-Repository-Adresse ein, um sie zu validieren.",
+			placeholder: "GitHub: benutzer/repo — GitLab: http://gitlab.example.com/group/repo",
+			enterAddressToValidate: "Gib eine GitHub- oder GitLab-Repository-Adresse ein, um sie zu validieren.",
 			addressRequired: "Repository-Adresse ist erforderlich.",
 			validating: "Repository-Adresse wird validiert...",
 			noReleasesFound: "Fehler: In diesem Repository wurden keine Releases gefunden.",
 			notFound: "Repository nicht gefunden. Prüfe die Adresse oder gib ein gültiges Token für den Zugriff auf ein privates Repository an.",
 			accessDenied: "Zugriff verweigert. Prüfe dein persönliches Zugriffstoken.",
+			gitlabNotFound:
+				"GitLab-Repository nicht gefunden. Prüfe die Adresse und stelle sicher, dass für interne oder private Projekte ein GitLab-Zugriffstoken in den Einstellungen konfiguriert ist.",
+			gitlabUnauthorized: "GitLab hat das Zugriffstoken abgelehnt. Prüfe das Token und sein Ablaufdatum.",
 			error: (message: string): string => `Fehler: ${message}`,
 			rateLimitExceeded: (minutes: number): string => `GitHub API Rate Limit überschritten. Versuche es in ${minutes} Minuten erneut.`,
 			rateLimitToast: (message: string): string =>
@@ -143,7 +166,7 @@ export const de = {
 			prereleaseSuffix: "(Vorabversion)",
 		},
 		token: {
-			name: "GitHub-Token",
+			name: "Repository-Token (GitHub oder GitLab)",
 			desc: "Wähle ein Secret als Token für dieses Repository aus (optional)",
 			settingCleared: (repository: string): string => `Token-Einstellung für ${repository} gelöscht`,
 			settingUpdated: (repository: string): string => `Token-Einstellung für ${repository} aktualisiert`,
@@ -153,15 +176,18 @@ export const de = {
 	},
 	addBetaThemeModal: {
 		heading: {
-			githubRepositoryForBetaTheme: "GitHub-Repository für das Beta-Theme:",
+			githubRepositoryForBetaTheme: "GitHub- oder GitLab-Repository für das Beta-Theme:",
 		},
 		alreadyInList: "Dieses Theme ist bereits in der Beta-Testliste",
+		invalidRepository: "Ungültige Repository-Adresse. Verwende benutzer/repo für GitHub oder die vollständige Repository-URL für GitLab.",
 	},
 	themeMessages: {
 		noThemeCssFile:
 			"Im Stammverzeichnis dieses Repositorys gibt es keine Datei theme.css oder theme-beta.css, daher kann kein Theme installiert werden.",
 		noManifestFile:
 			"Im Stammverzeichnis dieses Repositorys gibt es keine Datei manifest.json, daher kann das Theme nicht installiert werden.",
+		gitlabTokenError:
+			"GitLab hat das Zugriffstoken abgelehnt, oder es ist keins konfiguriert. Prüfe den GitLab-Token in den Einstellungen.",
 		installed: (themeName: string, repository: string): string => `Theme ${themeName} wurde aus ${repository} installiert. `,
 		updated: (themeName: string, repository: string): string => `Theme ${themeName} wurde aus ${repository} aktualisiert.`,
 		removed: (repository: string): string =>

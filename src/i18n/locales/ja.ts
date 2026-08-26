@@ -67,6 +67,25 @@ export const ja = {
 			clearPersonalAccessToken: "個人アクセストークンをクリア",
 			validate: "検証",
 		},
+		gitlabSection: {
+			heading: "GitLab",
+			host: {
+				name: "GitLab ホスト",
+				desc: "GitLab インスタンスのベース URL（例：http://gitlab.example.com）。GitLab 個人アクセストークンの検証に使用します。",
+				placeholder: "http://gitlab.example.com",
+			},
+			personalAccessToken: {
+				name: "GitLab 個人アクセストークン",
+				desc: {
+					prependText: "GitLab リポジトリからプラグインやテーマをインストールするための個人アクセストークン（スコープ：read_api）。",
+					linkText: "GitLab のトークン設定",
+					appendText: "で作成し、Obsidian のシークレットに追加してからここで選択してください。",
+				},
+			},
+			clearPersonalAccessToken: "GitLab 個人アクセストークンをクリア",
+			validate: "検証",
+			noHostConfigured: "GitLab ホストが構成されていません。上で GitLab ホストを設定するか、先に GitLab リポジトリを追加してください。",
+		},
 		betaPluginList: {
 			heading: "Beta プラグイン一覧",
 			filterPlaceholder: "プラグインを絞り込み",
@@ -117,18 +136,21 @@ export const ja = {
 		},
 		heading: {
 			changePluginVersion: "プラグインのバージョンを変更：",
-			githubRepositoryForBetaPlugin: "Beta プラグインの GitHub リポジトリ：",
+			githubRepositoryForBetaPlugin: "Beta プラグインの GitHub または GitLab リポジトリ：",
 		},
 		repository: {
 			label: "リポジトリ",
-			placeholder: "リポジトリ（例：https://GitHub.com/githubusername/repository-name）",
-			enterAddressToValidate: "検証する GitHub リポジトリアドレスを入力してください。",
+			placeholder: "GitHub：user/repo — GitLab：http://gitlab.example.com/group/repo",
+			enterAddressToValidate: "GitHub または GitLab のリポジトリアドレスを入力すると検証されます。",
 			addressRequired: "リポジトリアドレスが必要です。",
 			validating: "リポジトリアドレスを検証中...",
 			noReleasesFound: "エラー：このリポジトリにリリースが見つかりません。",
 			notFound:
 				"リポジトリが見つかりません。アドレスを確認するか、プライベートリポジトリにアクセスできる有効なトークンを指定してください。",
 			accessDenied: "アクセスが拒否されました。個人アクセストークンを確認してください。",
+			gitlabNotFound:
+				"GitLab リポジトリが見つかりません。アドレスを確認してください。internal またはプライベートプロジェクトの場合は、設定で GitLab 個人アクセストークンを構成してください。",
+			gitlabUnauthorized: "GitLab が個人アクセストークンを拒否しました。トークンと有効期限を確認してください。",
 			error: (message: string): string => `エラー：${message}`,
 			rateLimitExceeded: (minutes: number): string => `GitHub API のレート制限を超過しました。${minutes} 分後にもう一度お試しください。`,
 			rateLimitToast: (message: string): string =>
@@ -142,7 +164,7 @@ export const ja = {
 			prereleaseSuffix: "（プレリリース）",
 		},
 		token: {
-			name: "GitHub トークン",
+			name: "リポジトリトークン（GitHub または GitLab）",
 			desc: "このリポジトリ用のトークンとして使用するシークレットを選択します（任意）",
 			settingCleared: (repository: string): string => `${repository} のトークン設定をクリアしました`,
 			settingUpdated: (repository: string): string => `${repository} のトークン設定を更新しました`,
@@ -152,13 +174,15 @@ export const ja = {
 	},
 	addBetaThemeModal: {
 		heading: {
-			githubRepositoryForBetaTheme: "Beta テーマの GitHub リポジトリ：",
+			githubRepositoryForBetaTheme: "Beta テーマの GitHub または GitLab リポジトリ：",
 		},
 		alreadyInList: "このテーマはすでに Beta テスト一覧にあります",
+		invalidRepository: "無効なリポジトリアドレスです。GitHub は user/repo 形式、GitLab は完全なリポジトリ URL を指定してください。",
 	},
 	themeMessages: {
 		noThemeCssFile: "このリポジトリのルートパスには theme.css または theme-beta.css がないため、インストールできるテーマがありません。",
 		noManifestFile: "このリポジトリのルートパスには manifest.json がないため、テーマをインストールできません。",
+		gitlabTokenError: "GitLab が個人アクセストークンを拒否したか、トークンが構成されていません。設定で GitLab トークンを確認してください。",
 		installed: (themeName: string, repository: string): string => `${repository} からテーマ ${themeName} をインストールしました。`,
 		updated: (themeName: string, repository: string): string => `${repository} からテーマ ${themeName} を更新しました。`,
 		removed: (repository: string): string =>

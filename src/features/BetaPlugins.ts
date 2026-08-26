@@ -4,11 +4,13 @@ import { apiVersion, Notice, normalizePath, Platform, requireApiVersion } from "
 import { compare as compareVersions, coerce as semverCoerce } from "semver";
 import { confirm } from "src/ui/ConfirmModal";
 import { GHRateLimitError, GitHubResponseError } from "src/utils/GitHubAPIErrors";
+import { GitLabResponseError } from "src/utils/GitLabAPIErrors";
 import type BratPlugin from "../main";
 import { addBetaPluginToList } from "../settings";
 import AddNewPluginModal from "../ui/AddNewPluginModal";
-import { isConnectedToInternet } from "../utils/internetconnection";
+import { isConnectedToInternet, isHostReachable } from "../utils/internetconnection";
 import { toastMessage } from "../utils/notifications";
+import { releasePageUrl } from "../utils/utils";
 import {
 	grabCommmunityPluginList,
 	grabReleaseFileFromRepository,
@@ -16,6 +18,7 @@ import {
 	isPrivateRepo,
 	type Release,
 } from "./githubUtils";
+import { grabGitLabRelease, grabGitLabReleaseFile, isGitLabRepository, parseGitLabRepository } from "./gitlabUtils";
 
 /**
  * all the files needed for a plugin based on the release files are hre
@@ -112,38 +115,57 @@ export default class BetaPlugins {
 
 		// GitHub API access might throw a rate limit
 		try {
-			// check if the repository is private
-			const isPrivate = await isPrivateRepo(repositoryPath, this.plugin.settings.debuggingMode, token);
+			let rawManifest: string | null = null;
+			let releaseTag = "";
 
-			// Grab the manifest.json for the latest release from the repository
-			const release: Release | null = await grabReleaseFromRepository(
-				repositoryPath,
-				specifyVersion,
-				getBetaManifest,
-				this.plugin.settings.debuggingMode,
-				isPrivate,
-				token,
-			);
+			if (isGitLabRepository(repositoryPath)) {
+				// GitLab: fetch the release and its manifest.json asset directly.
+				// The token (when set) is always attached, there is no private/public probe.
+				const release = await grabGitLabRelease(repositoryPath, specifyVersion || undefined, token, this.plugin.settings.debuggingMode);
 
-			if (!release) {
-				if (reportIssues) {
-					toastMessage(
-						this.plugin,
-						`${repositoryPath}\nThis does not seem to be an obsidian plugin with valid releases, as there are no releases available.`,
-						noticeTimeout,
-					);
-					console.error("BRAT: validateRepository", repositoryPath, getBetaManifest, reportIssues);
+				if (!release) {
+					if (reportIssues) {
+						toastMessage(
+							this.plugin,
+							`${repositoryPath}\nThis does not seem to be an obsidian plugin with valid releases, as there are no releases available.`,
+							noticeTimeout,
+						);
+						console.error("BRAT: validateRepository", repositoryPath, getBetaManifest, reportIssues);
+					}
+					return null;
 				}
-				return null;
-			}
 
-			const rawManifest = await grabReleaseFileFromRepository(
-				release,
-				"manifest.json",
-				this.plugin.settings.debuggingMode,
-				isPrivate,
-				token,
-			);
+				releaseTag = release.tag_name;
+				rawManifest = await grabGitLabReleaseFile(release, "manifest.json", repositoryPath, token, this.plugin.settings.debuggingMode);
+			} else {
+				// check if the repository is private
+				const isPrivate = await isPrivateRepo(repositoryPath, this.plugin.settings.debuggingMode, token);
+
+				// Grab the manifest.json for the latest release from the repository
+				const release: Release | null = await grabReleaseFromRepository(
+					repositoryPath,
+					specifyVersion,
+					getBetaManifest,
+					this.plugin.settings.debuggingMode,
+					isPrivate,
+					token,
+				);
+
+				if (!release) {
+					if (reportIssues) {
+						toastMessage(
+							this.plugin,
+							`${repositoryPath}\nThis does not seem to be an obsidian plugin with valid releases, as there are no releases available.`,
+							noticeTimeout,
+						);
+						console.error("BRAT: validateRepository", repositoryPath, getBetaManifest, reportIssues);
+					}
+					return null;
+				}
+
+				releaseTag = release.tag_name;
+				rawManifest = await grabReleaseFileFromRepository(release, "manifest.json", this.plugin.settings.debuggingMode, isPrivate, token);
+			}
 
 			if (!rawManifest) {
 				// this is a plugin with a manifest json, try to see if there is a beta version
@@ -182,7 +204,7 @@ export default class BetaPlugins {
 			}
 
 			// Improve robustness: if semver coercion fails, compare raw versions.
-			const expectedVersion = semverCoerce(release.tag_name, {
+			const expectedVersion = semverCoerce(releaseTag, {
 				includePrerelease: true,
 				loose: true,
 			});
@@ -194,13 +216,13 @@ export default class BetaPlugins {
 			const hasVersionMismatch =
 				expectedVersion && manifestVersion
 					? compareVersions(expectedVersion.version, manifestVersion.version) !== 0
-					: expectedVersion !== null && manifestJson.version !== release.tag_name;
+					: expectedVersion !== null && manifestJson.version !== releaseTag;
 
 			if (hasVersionMismatch && expectedVersion) {
 				if (reportIssues)
 					toastMessage(
 						this.plugin,
-						`${repositoryPath}\nVersion mismatch detected:\nRelease tag version: ${release.tag_name}\nManifest version: ${manifestJson.version}\n\nThe release tag version will be used to ensure consistency.`,
+						`${repositoryPath}\nVersion mismatch detected:\nRelease tag version: ${releaseTag}\nManifest version: ${manifestJson.version}\n\nThe release tag version will be used to ensure consistency.`,
 						noticeTimeout,
 					);
 
@@ -243,6 +265,29 @@ export default class BetaPlugins {
 				throw error;
 			}
 
+			if (error instanceof GitLabResponseError) {
+				if (reportIssues) {
+					if (error.status === 401 || error.status === 403) {
+						toastMessage(
+							this.plugin,
+							`${repositoryPath}\nGitLab rejected the personal access token (${error.status}). Check the GitLab token in the settings and its expiry date.`,
+							noticeTimeout,
+						);
+					} else if (error.status === 404) {
+						toastMessage(
+							this.plugin,
+							`${repositoryPath}\nGitLab repository not found (404). Check the address; for internal or private projects a GitLab personal access token must be configured in the settings.`,
+							noticeTimeout,
+						);
+					} else {
+						toastMessage(this.plugin, `${repositoryPath}\nGitLab API error ${error.status}: ${error.message}`, noticeTimeout);
+					}
+				}
+				console.error(`BRAT: validateRepository ${error}`);
+
+				throw error;
+			}
+
 			if (reportIssues)
 				toastMessage(
 					this.plugin,
@@ -264,6 +309,22 @@ export default class BetaPlugins {
 	 * @returns all release files as strings based on the ReleaseFiles interface
 	 */
 	async getAllReleaseFiles(repositoryPath: string, getManifest: boolean, specifyVersion = "", tokenValue = ""): Promise<ReleaseFiles> {
+		if (isGitLabRepository(repositoryPath)) {
+			// GitLab: the token is always attached when present, no private/public probe
+			const release = await grabGitLabRelease(repositoryPath, specifyVersion || undefined, tokenValue, this.plugin.settings.debuggingMode);
+			if (!release) {
+				throw new Error("No release found");
+			}
+			const reallyGetManifestOrNot = getManifest || specifyVersion !== "";
+			return {
+				mainJs: await grabGitLabReleaseFile(release, "main.js", repositoryPath, tokenValue, this.plugin.settings.debuggingMode),
+				manifest: reallyGetManifestOrNot
+					? await grabGitLabReleaseFile(release, "manifest.json", repositoryPath, tokenValue, this.plugin.settings.debuggingMode)
+					: "",
+				styles: await grabGitLabReleaseFile(release, "styles.css", repositoryPath, tokenValue, this.plugin.settings.debuggingMode),
+			};
+		}
+
 		// Use provided token for API calls
 		const token = tokenValue;
 
@@ -367,6 +428,9 @@ export default class BetaPlugins {
 						10,
 					);
 				}
+			} else if (isGitLabRepository(repositoryPath) && this.plugin.settings.gitlabTokenName) {
+				// GitLab repositories use the global GitLab token
+				tokenValue = this.plugin.app.secretStorage.getSecret(this.plugin.settings.gitlabTokenName) || "";
 			} else if (this.plugin.settings.globalTokenName) {
 				tokenValue = this.plugin.app.secretStorage.getSecret(this.plugin.settings.globalTokenName) || "";
 			}
@@ -587,13 +651,10 @@ export default class BetaPlugins {
 					if (seeIfUpdatedOnly) {
 						// dont update, just report it
 						const msg = `There is an update available for ${primaryManifest.id} from version ${localManifestJson.version} to ${primaryManifest.version}. `;
-						await this.plugin.log(
-							`${msg}[Release Info](https://github.com/${repositoryPath}/releases/tag/${primaryManifest.version})`,
-							true,
-						);
+						await this.plugin.log(`${msg}[Release Info](${releasePageUrl(repositoryPath, primaryManifest.version)})`, true);
 						toastMessage(this.plugin, msg, 30, () => {
 							if (primaryManifest) {
-								window.open(`https://github.com/${repositoryPath}/releases/tag/${primaryManifest.version}`);
+								window.open(releasePageUrl(repositoryPath, primaryManifest.version));
 							}
 						});
 						return false;
@@ -602,10 +663,10 @@ export default class BetaPlugins {
 					await this.plugin.app.plugins.loadManifests();
 					await this.reloadPlugin(primaryManifest.id);
 					const msg = `${primaryManifest.id}\nPlugin has been updated from version ${localManifestJson.version} to ${primaryManifest.version}. `;
-					await this.plugin.log(`${msg}[Release Info](https://github.com/${repositoryPath}/releases/tag/${primaryManifest.version})`, true);
+					await this.plugin.log(`${msg}[Release Info](${releasePageUrl(repositoryPath, primaryManifest.version)})`, true);
 					toastMessage(this.plugin, msg, 30, () => {
 						if (primaryManifest) {
-							window.open(`https://github.com/${repositoryPath}/releases/tag/${primaryManifest.version}`);
+							window.open(releasePageUrl(repositoryPath, primaryManifest.version));
 						}
 					});
 					return true;
@@ -688,10 +749,18 @@ export default class BetaPlugins {
 	 *
 	 */
 	async checkForPluginUpdatesAndInstallUpdates(showInfo = false, onlyCheckDontUpdate = false): Promise<void> {
-		if (!(await isConnectedToInternet())) {
-			console.debug("BRAT: No internet detected.");
-			return;
-		}
+		// Per-host reachability: GitHub relies on the general internet check, while
+		// GitLab instances are probed directly so that intranet-only setups (where
+		// obsidian.md is unreachable) still update their GitLab plugins.
+		const reachability = new Map<string, boolean>();
+		const isRepoReachable = async (repo: string): Promise<boolean> => {
+			const key = isGitLabRepository(repo) ? (parseGitLabRepository(repo)?.baseUrl ?? "") : "__github__";
+			if (!reachability.has(key)) {
+				reachability.set(key, key === "__github__" ? await isConnectedToInternet() : await isHostReachable(key));
+			}
+			return reachability.get(key) ?? false;
+		};
+
 		let newNotice: Notice | undefined;
 		const msg1 = "Checking for plugin updates STARTED";
 		await this.plugin.log(msg1, true);
@@ -701,6 +770,10 @@ export default class BetaPlugins {
 		// Create a map of repo to tokenName for per-repo tokens
 		const repoTokens = new Map(this.plugin.settings.pluginSubListFrozenVersion.map((f) => [f.repo, f.tokenName || ""]));
 		for (const bp of this.plugin.settings.pluginList) {
+			if (!(await isRepoReachable(bp))) {
+				console.debug(`BRAT: host unreachable, skipping ${bp}`);
+				continue;
+			}
 			// Skip if repo is frozen and not set to "latest"
 			const version = frozenVersions.get(bp);
 			if (version && version !== "latest") {
@@ -786,6 +859,8 @@ export default class BetaPlugins {
 		for (const repo of this.plugin.settings.pluginList) {
 			const version = frozenVersions.get(repo);
 			if (version && version !== "latest") continue;
+			// GitLab repos never appear in the Obsidian community registry (GitHub-only)
+			if (isGitLabRepository(repo)) continue;
 			if (!communityRepos.has(repo)) continue;
 
 			try {

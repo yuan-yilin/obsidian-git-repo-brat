@@ -1,9 +1,5 @@
-import {
-	type GitHubTokenInfo,
-	TokenErrorType,
-	type TokenValidationError,
-	validateGitHubToken,
-} from "../features/githubUtils";
+import { type GitHubTokenInfo, TokenErrorType, type TokenValidationError, validateGitHubToken } from "../features/githubUtils";
+import { isGitLabRepository, parseGitLabRepository, validateGitLabToken } from "../features/gitlabUtils";
 
 export class TokenValidator {
 	private statusEl?: HTMLElement | null;
@@ -22,6 +18,11 @@ export class TokenValidator {
 		}
 
 		try {
+			// GitLab repositories validate the token against the GitLab instance
+			if (repository && isGitLabRepository(repository)) {
+				return await this.validateGitLabTokenForRepository(token, repository);
+			}
+
 			const patInfo = await validateGitHubToken(token, repository);
 			this.statusEl?.removeClass("invalid", "valid");
 			this.statusEl?.empty();
@@ -41,6 +42,29 @@ export class TokenValidator {
 			this.statusEl?.addClass("invalid");
 			return false;
 		}
+	}
+
+	private async validateGitLabTokenForRepository(token: string, repository: string): Promise<boolean> {
+		this.statusEl?.removeClass("invalid", "valid");
+		this.statusEl?.empty();
+
+		const host = parseGitLabRepository(repository)?.baseUrl ?? "";
+		const info = await validateGitLabToken(token, host);
+
+		if (info.validToken) {
+			this.statusEl?.addClass("valid");
+			const details = this.statusEl?.createDiv({ cls: "brat-token-details" });
+			details?.createDiv({
+				text: info.userName ? `✓ Valid token (user: ${info.userName})` : "✓ Valid token",
+				cls: "brat-token-status valid",
+			});
+			return true;
+		}
+
+		this.statusEl?.addClass("invalid");
+		const errorDetails = this.statusEl?.createDiv({ cls: "brat-token-error" });
+		errorDetails?.createDiv({ text: info.error.message });
+		return false;
 	}
 
 	private showValidTokenInfo(patInfo: GitHubTokenInfo): void {
@@ -69,9 +93,7 @@ export class TokenValidator {
 
 		if (patInfo.expirationDate) {
 			const expires = new Date(patInfo.expirationDate);
-			const daysLeft = Math.ceil(
-				(expires.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
-			);
+			const daysLeft = Math.ceil((expires.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 
 			if (daysLeft < 7) {
 				details.createDiv({

@@ -65,6 +65,26 @@ export const en = {
 			clearPersonalAccessToken: "Clear personal access token",
 			validate: "Validate",
 		},
+		gitlabSection: {
+			heading: "GitLab",
+			host: {
+				name: "GitLab host",
+				desc: "Base URL of your GitLab instance, e.g. http://gitlab.example.com. Used to validate the GitLab personal access token.",
+				placeholder: "http://gitlab.example.com",
+			},
+			personalAccessToken: {
+				name: "GitLab personal access token",
+				desc: {
+					prependText:
+						"Personal access token used to install plugins and themes from GitLab repositories (scope: read_api). Create one in ",
+					linkText: "your GitLab access token settings",
+					appendText: ", add it to Obsidian's secrets, then select it here.",
+				},
+			},
+			clearPersonalAccessToken: "Clear GitLab personal access token",
+			validate: "Validate",
+			noHostConfigured: "No GitLab host configured. Set the GitLab host above, or add a GitLab repository first.",
+		},
 		betaPluginList: {
 			heading: "Beta plugin list",
 			filterPlaceholder: "Filter plugins",
@@ -113,17 +133,20 @@ export const en = {
 		},
 		heading: {
 			changePluginVersion: "Change plugin version: ",
-			githubRepositoryForBetaPlugin: "GitHub repository for beta plugin:",
+			githubRepositoryForBetaPlugin: "GitHub or GitLab repository for beta plugin:",
 		},
 		repository: {
 			label: "Repository",
-			placeholder: "Repository (example: https://GitHub.com/githubusername/repository-name)",
-			enterAddressToValidate: "Enter a GitHub repository address to validate it.",
+			placeholder: "GitHub: user/repo — GitLab: http://gitlab.example.com/group/repo",
+			enterAddressToValidate: "Enter a GitHub or GitLab repository address to validate it.",
 			addressRequired: "Repository address is required.",
 			validating: "Validating repository address...",
 			noReleasesFound: "Error: No releases found in this repository.",
 			notFound: "Repository not found. Check the address or provide a valid token for access to a private repository.",
 			accessDenied: "Access denied. Check your personal access token.",
+			gitlabNotFound:
+				"GitLab repository not found. Check the address, and make sure a GitLab personal access token is configured in the settings for internal or private projects.",
+			gitlabUnauthorized: "GitLab rejected the personal access token. Verify the token and its expiry date.",
 			error: (message: string): string => `Error: ${message}`,
 			rateLimitExceeded: (minutes: number): string => `GitHub API rate limit exceeded. Try again in ${minutes} minutes.`,
 			rateLimitToast: (message: string): string =>
@@ -137,7 +160,7 @@ export const en = {
 			prereleaseSuffix: "(Prerelease)",
 		},
 		token: {
-			name: "GitHub token",
+			name: "Repository token (GitHub or GitLab)",
 			desc: "Select a secret as token for this repository (optional)",
 			settingCleared: (repository: string): string => `Token setting cleared for ${repository}`,
 			settingUpdated: (repository: string): string => `Token setting updated for ${repository}`,
@@ -147,13 +170,16 @@ export const en = {
 	},
 	addBetaThemeModal: {
 		heading: {
-			githubRepositoryForBetaTheme: "GitHub repository for beta theme:",
+			githubRepositoryForBetaTheme: "GitHub or GitLab repository for beta theme:",
 		},
 		alreadyInList: "This theme is already in the list for beta testing",
+		invalidRepository: "Invalid repository address. Use user/repo for GitHub, or the full repository URL for GitLab.",
 	},
 	themeMessages: {
 		noThemeCssFile: "There is no theme.css or theme-beta.css file in the root path of this repository, so there is no theme to install.",
 		noManifestFile: "There is no manifest.json file in the root path of this repository, so theme cannot be installed.",
+		gitlabTokenError:
+			"GitLab rejected the personal access token, or no GitLab token is configured. Check the GitLab token in the settings.",
 		installed: (themeName: string, repository: string): string => `${themeName} theme installed from ${repository}. `,
 		updated: (themeName: string, repository: string): string => `${themeName} theme updated from ${repository}.`,
 		removed: (repository: string): string =>

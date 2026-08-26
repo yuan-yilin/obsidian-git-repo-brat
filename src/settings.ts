@@ -32,6 +32,8 @@ export interface Settings {
 	/** @deprecated Tokens are now stored in SecretStorage (Obsidian 1.11.4+) */
 	personalAccessToken?: string;
 	globalTokenName?: string; // name of secret in SecretStorage for global PAT
+	gitlabHost?: string; // base URL of the GitLab instance, used to validate the global GitLab token
+	gitlabTokenName?: string; // name of secret in SecretStorage for global GitLab PAT
 	selectLatestPluginVersionByDefault: boolean;
 	allowIncompatiblePlugins: boolean;
 }
@@ -50,6 +52,8 @@ export const DEFAULT_SETTINGS: Settings = {
 	notificationsEnabled: true,
 	globalTokenName: "",
 	personalAccessToken: "",
+	gitlabHost: "",
+	gitlabTokenName: "",
 	selectLatestPluginVersionByDefault: false,
 	allowIncompatiblePlugins: false,
 };
@@ -77,9 +81,7 @@ export function addBetaPluginToList(
 	}
 
 	// If it's an existing frozen version plugin, update it instead of checking for duplicates
-	const existingFrozenPlugin = plugin.settings.pluginSubListFrozenVersion.find(
-		(p) => p.repo === repositoryPath,
-	);
+	const existingFrozenPlugin = plugin.settings.pluginSubListFrozenVersion.find((p) => p.repo === repositoryPath);
 	if (existingFrozenPlugin) {
 		Object.assign(existingFrozenPlugin, {
 			repo: repositoryPath,
@@ -111,10 +113,7 @@ export function addBetaPluginToList(
  * @param repositoryPath - path to the GitHub repository
  *
  */
-export function existBetaPluginInList(
-	plugin: BratPlugin,
-	repositoryPath: string,
-): boolean {
+export function existBetaPluginInList(plugin: BratPlugin, repositoryPath: string): boolean {
 	return plugin.settings.pluginList.contains(repositoryPath);
 }
 
@@ -126,11 +125,7 @@ export function existBetaPluginInList(
  * @param themeCss - raw text of the theme. It is checksummed and this is used for tracking if changes occurred to the theme
  *
  */
-export function addBetaThemeToList(
-	plugin: BratPlugin,
-	repositoryPath: string,
-	themeCss: string,
-): void {
+export function addBetaThemeToList(plugin: BratPlugin, repositoryPath: string, themeCss: string): void {
 	const newTheme: ThemeInforamtion = {
 		repo: repositoryPath,
 		lastUpdate: checksumForString(themeCss),
@@ -146,13 +141,8 @@ export function addBetaThemeToList(
  * @param repositoryPath - path to the GitHub repository
  *
  */
-export function existBetaThemeinInList(
-	plugin: BratPlugin,
-	repositoryPath: string,
-): boolean {
-	const testIfThemExists = plugin.settings.themesList.find(
-		(t) => t.repo === repositoryPath,
-	);
+export function existBetaThemeinInList(plugin: BratPlugin, repositoryPath: string): boolean {
+	const testIfThemExists = plugin.settings.themesList.find((t) => t.repo === repositoryPath);
 	return !!testIfThemExists;
 }
 
@@ -163,14 +153,8 @@ export function existBetaThemeinInList(
  * @param repositoryPath - path to the GitHub repository
  * @param tokenName - name of secret in SecretStorage for this repo (empty string to clear)
  */
-export function updatePluginTokenName(
-	plugin: BratPlugin,
-	repositoryPath: string,
-	tokenName: string,
-): void {
-	const existingFrozenPlugin = plugin.settings.pluginSubListFrozenVersion.find(
-		(p) => p.repo === repositoryPath,
-	);
+export function updatePluginTokenName(plugin: BratPlugin, repositoryPath: string, tokenName: string): void {
+	const existingFrozenPlugin = plugin.settings.pluginSubListFrozenVersion.find((p) => p.repo === repositoryPath);
 	if (existingFrozenPlugin) {
 		existingFrozenPlugin.tokenName = tokenName || undefined;
 		void plugin.saveSettings();
@@ -185,11 +169,7 @@ export function updatePluginTokenName(
  * @param checksum - checksum of file. In past we used the date of file update, but this proved to not be consisent with the GitHub cache.
  *
  */
-export function updateBetaThemeLastUpdateChecksum(
-	plugin: BratPlugin,
-	repositoryPath: string,
-	checksum: string,
-): void {
+export function updateBetaThemeLastUpdateChecksum(plugin: BratPlugin, repositoryPath: string, checksum: string): void {
 	for (const t of plugin.settings.themesList) {
 		if (t.repo === repositoryPath) {
 			t.lastUpdate = checksum;

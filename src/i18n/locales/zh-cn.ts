@@ -67,6 +67,25 @@ export const zhCn = {
 			clearPersonalAccessToken: "清除个人访问令牌设置",
 			validate: "验证",
 		},
+		gitlabSection: {
+			heading: "GitLab",
+			host: {
+				name: "GitLab 实例地址",
+				desc: "GitLab 实例的基础地址，例如 http://gitlab.example.com。用于验证 GitLab 个人访问令牌。",
+				placeholder: "http://gitlab.example.com",
+			},
+			personalAccessToken: {
+				name: "GitLab 个人访问令牌",
+				desc: {
+					prependText: "用于从 GitLab 仓库安装插件和主题的个人访问令牌（需要 read_api 权限）。你可以在 ",
+					linkText: "GitLab 令牌设置",
+					appendText: " 中创建令牌，添加到 Obsidian 密钥库后在这里选择。",
+				},
+			},
+			clearPersonalAccessToken: "清除 GitLab 个人访问令牌设置",
+			validate: "验证",
+			noHostConfigured: "未配置 GitLab 实例地址。请先在上方填写 GitLab host，或先添加一个 GitLab 仓库。",
+		},
 		betaPluginList: {
 			heading: "Beta 插件列表",
 			filterPlaceholder: "筛选插件",
@@ -114,17 +133,19 @@ export const zhCn = {
 		},
 		heading: {
 			changePluginVersion: "更改插件版本：",
-			githubRepositoryForBetaPlugin: "Beta 插件的 GitHub 仓库：",
+			githubRepositoryForBetaPlugin: "Beta 插件的 GitHub 或 GitLab 仓库：",
 		},
 		repository: {
 			label: "仓库",
-			placeholder: "仓库（示例：https://GitHub.com/githubusername/repository-name）",
-			enterAddressToValidate: "输入 GitHub 仓库地址后会自动验证。",
+			placeholder: "GitHub：user/repo — GitLab：http://gitlab.example.com/group/repo",
+			enterAddressToValidate: "输入 GitHub 或 GitLab 仓库地址后会自动验证。",
 			addressRequired: "需要填写仓库地址。",
 			validating: "正在验证仓库地址...",
 			noReleasesFound: "错误：此仓库中没有找到发布版本。",
 			notFound: "找不到仓库。请检查地址，或提供可访问私有仓库的有效令牌。",
 			accessDenied: "访问被拒绝。请检查个人访问令牌。",
+			gitlabNotFound: "找不到 GitLab 仓库。请检查地址；若是 internal 或私有项目，请先在设置中配置 GitLab 个人访问令牌。",
+			gitlabUnauthorized: "GitLab 拒绝了个人访问令牌。请检查令牌是否有效、是否过期。",
 			error: (message: string): string => `错误：${message}`,
 			rateLimitExceeded: (minutes: number): string => `GitHub API 请求额度已用尽。请在 ${minutes} 分钟后重试。`,
 			rateLimitToast: (): string => "GitHub API 请求额度已用尽。可以在 BRAT 设置中添加个人访问令牌以提高额度。详情请查看文档。",
@@ -137,7 +158,7 @@ export const zhCn = {
 			prereleaseSuffix: "（预发布）",
 		},
 		token: {
-			name: "GitHub 令牌",
+			name: "仓库令牌（GitHub 或 GitLab）",
 			desc: "选择一个密钥，作为访问此仓库的令牌（可选）",
 			settingCleared: (repository: string): string => `已清除 ${repository} 的令牌设置`,
 			settingUpdated: (repository: string): string => `已更新 ${repository} 的令牌设置`,
@@ -147,13 +168,15 @@ export const zhCn = {
 	},
 	addBetaThemeModal: {
 		heading: {
-			githubRepositoryForBetaTheme: "Beta 主题的 GitHub 仓库：",
+			githubRepositoryForBetaTheme: "Beta 主题的 GitHub 或 GitLab 仓库：",
 		},
 		alreadyInList: "这个主题已经在 Beta 测试列表中",
+		invalidRepository: "无效的仓库地址。GitHub 请用 user/repo 格式，GitLab 请填完整的仓库 URL。",
 	},
 	themeMessages: {
 		noThemeCssFile: "这个仓库的根目录里没有 theme.css 或 theme-beta.css 文件，因此没有可安装的主题。",
 		noManifestFile: "这个仓库的根目录里没有 manifest.json 文件，因此无法安装该主题。",
+		gitlabTokenError: "GitLab 拒绝了个人访问令牌，或尚未配置 GitLab 令牌。请在设置中检查 GitLab 令牌。",
 		installed: (themeName: string, repository: string): string => `已从 ${repository} 安装主题 ${themeName}。`,
 		updated: (themeName: string, repository: string): string => `已从 ${repository} 更新主题 ${themeName}。`,
 		removed: (repository: string): string =>

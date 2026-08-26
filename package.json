@@ -1,7 +1,7 @@
 {
-  "name": "obsidian42-brat",
+  "name": "gitlab-brat",
   "version": "0.0.0",
-  "description": "Obsidian42 - Beta Reviewer's Autoupdate Tool.",
+  "description": "Beta Reviewer's Auto-update Tool with GitLab support.",
   "main": "main.js",
   "scripts": {
     "dev": "npm run build:dev",

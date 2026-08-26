@@ -6,6 +6,7 @@ import { grabCommmunityPluginList, grabCommmunityThemesList } from "../features/
 import { themesCheckAndUpdates } from "../features/themes";
 import type BratPlugin from "../main";
 import { toastMessage } from "../utils/notifications";
+import { repositoryUrl } from "../utils/utils";
 import AddNewTheme from "./AddNewTheme";
 import type { SuggesterItem } from "./GenericFuzzySuggester";
 import { GenericFuzzySuggester } from "./GenericFuzzySuggester";
@@ -177,7 +178,7 @@ export default class PluginCommands {
 					const gfs = new GenericFuzzySuggester(this.plugin);
 					gfs.setSuggesterData(bratList);
 					gfs.display((results) => {
-						if (results.info) window.open(`https://github.com/${results.info as string}`);
+						if (results.info) window.open(repositoryUrl(results.info as string));
 					});
 				}
 			},

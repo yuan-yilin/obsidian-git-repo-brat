@@ -10,9 +10,7 @@ interface ConfirmOptions {
 	title?: DocumentFragment | string;
 }
 
-type PromiseResolve<T> = undefined extends T
-	? (value?: PromiseLike<T> | T) => void
-	: (value: PromiseLike<T> | T) => void;
+type PromiseResolve<T> = undefined extends T ? (value?: PromiseLike<T> | T) => void : (value: PromiseLike<T> | T) => void;
 
 class ConfirmModal extends Modal {
 	private isConfirmed = false;

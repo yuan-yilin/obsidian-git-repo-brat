@@ -1,9 +1,11 @@
 import type { TextComponent } from "obsidian";
 import { ButtonComponent, Modal, Platform, SecretComponent, Setting } from "obsidian";
-import { fetchReleaseVersions, type ReleaseVersion, scrubRepositoryUrl } from "src/features/githubUtils";
+import { fetchReleaseVersions, type ReleaseVersion } from "src/features/githubUtils";
+import { fetchGitLabReleaseVersions, isGitLabRepository, normalizeRepositoryUrl } from "src/features/gitlabUtils";
 import { GHRateLimitError, GitHubResponseError } from "src/utils/GitHubAPIErrors";
+import { GitLabResponseError } from "src/utils/GitLabAPIErrors";
 import { TokenValidator } from "src/utils/TokenValidator";
-import { createGitHubResourceLink } from "src/utils/utils";
+import { createRepositoryLink } from "src/utils/utils";
 import type BetaPlugins from "../features/BetaPlugins";
 import { getTranslations } from "../i18n";
 import type BratPlugin from "../main";
@@ -65,7 +67,7 @@ export default class AddNewPluginModal extends Modal {
 	async submitForm(): Promise<void> {
 		const text = getTranslations().addBetaPluginModal;
 		if (this.address === "") return;
-		const scrubbedAddress = scrubRepositoryUrl(this.address);
+		const scrubbedAddress = normalizeRepositoryUrl(this.address);
 
 		// If it's an existing frozen version plugin, update it instead of checking for duplicates
 		const existingFrozenPlugin = this.plugin.settings.pluginSubListFrozenVersion.find((p) => p.repo === scrubbedAddress);
@@ -181,7 +183,7 @@ export default class AddNewPluginModal extends Modal {
 		const heading = this.contentEl.createEl("h4");
 		if (this.address) {
 			heading.appendText(text.heading.changePluginVersion);
-			heading.appendChild(createGitHubResourceLink(this.address));
+			heading.appendChild(createRepositoryLink(this.address));
 		} else {
 			heading.setText(text.heading.githubRepositoryForBetaPlugin);
 		}
@@ -201,8 +203,8 @@ export default class AddNewPluginModal extends Modal {
 						addressEl.setPlaceholder(text.repository.placeholder);
 						addressEl.setValue(this.address);
 						addressEl.onChange((value) => {
-							this.address = scrubRepositoryUrl(value.trim());
-							if (this.version !== "" && (!this.address || !this.isGitHubRepositoryMatch(this.address))) {
+							this.address = normalizeRepositoryUrl(value.trim());
+							if (this.version !== "" && (!this.address || !this.isRepositoryMatch(this.address))) {
 								// Disable version dropdown if version is set and address is empty
 								if (this.versionSetting) {
 									this.updateVersionDropdown(this.versionSetting, []);
@@ -213,9 +215,9 @@ export default class AddNewPluginModal extends Modal {
 								}
 							}
 
-							// If the GitHub Repository matches the GitHub pattern, enable the "Add Plugin"
+							// If the repository matches the GitHub or GitLab pattern, enable the "Add Plugin"
 							if (!this.version) {
-								if (this.isGitHubRepositoryMatch(this.address)) this.addPluginButton?.setDisabled(false);
+								if (this.isRepositoryMatch(this.address)) this.addPluginButton?.setDisabled(false);
 								else this.addPluginButton?.setDisabled(true);
 							}
 						});
@@ -431,7 +433,7 @@ export default class AddNewPluginModal extends Modal {
 			// Clear the version dropdown
 			this.updateVersionDropdown(this.versionSetting, []);
 		}
-		const scrubbedAddress = scrubRepositoryUrl(this.address);
+		const scrubbedAddress = normalizeRepositoryUrl(this.address);
 
 		try {
 			// Get the actual token value from SecretStorage
@@ -441,6 +443,12 @@ export default class AddNewPluginModal extends Modal {
 				if (tokenValue) {
 					tokenToUse = tokenValue;
 				}
+			} else if (isGitLabRepository(scrubbedAddress) && this.plugin.settings.gitlabTokenName) {
+				// GitLab repositories use the global GitLab token
+				const globalToken = this.plugin.app.secretStorage.getSecret(this.plugin.settings.gitlabTokenName);
+				if (globalToken) {
+					tokenToUse = globalToken;
+				}
 			} else if (this.plugin.settings.globalTokenName) {
 				const globalToken = this.plugin.app.secretStorage.getSecret(this.plugin.settings.globalTokenName);
 				if (globalToken) {
@@ -448,7 +456,9 @@ export default class AddNewPluginModal extends Modal {
 				}
 			}
 
-			const versions = await fetchReleaseVersions(scrubbedAddress, this.plugin.settings.debuggingMode, tokenToUse);
+			const versions = isGitLabRepository(scrubbedAddress)
+				? await fetchGitLabReleaseVersions(scrubbedAddress, tokenToUse, this.plugin.settings.debuggingMode)
+				: await fetchReleaseVersions(scrubbedAddress, this.plugin.settings.debuggingMode, tokenToUse);
 
 			if (versions && versions.length > 0) {
 				// Add valid-repository class
@@ -474,6 +484,20 @@ export default class AddNewPluginModal extends Modal {
 				this.addPluginButton?.setDisabled(true);
 			}
 		} catch (error: unknown) {
+			if (error instanceof GitLabResponseError) {
+				// Add invalid-repository class
+				validateInputEl?.inputEl.classList.remove("valid-repository");
+				validateInputEl?.inputEl.classList.add("invalid-repository");
+				validationStatusEl?.setText(
+					error.status === 401 || error.status === 403 ? text.repository.gitlabUnauthorized : text.repository.gitlabNotFound,
+				);
+				validationStatusEl?.addClass("validation-status-error");
+
+				this.versionSetting?.settingEl.classList.add("disabled-setting");
+				this.versionSetting?.setDisabled(true);
+				this.addPluginButton?.setDisabled(true);
+			}
+
 			if (error instanceof GHRateLimitError) {
 				// Add invalid-repository class
 				validateInputEl?.inputEl.classList.remove("valid-repository");
@@ -524,7 +548,7 @@ export default class AddNewPluginModal extends Modal {
 		}
 	}
 
-	private isGitHubRepositoryMatch(address: string): boolean {
+	private isRepositoryMatch(address: string): boolean {
 		// Remove trailing .git if present
 		const cleanAddress = address
 			.trim()
@@ -532,10 +556,11 @@ export default class AddNewPluginModal extends Modal {
 			.toLowerCase();
 
 		// Match either format:
-		// 1. user/repo
-		// 2. https://github.com/user/repo
-		const githubPattern = /^(?:https?:\/\/github\.com\/)?([a-zA-Z0-9._-]+)\/([a-zA-Z0-9._-]+)$/i;
+		// 1. GitHub: user/repo or https://github.com/user/repo
+		const githubPattern = /^(?:https?:\/\/(?:www\.)?github\.com\/)?([a-z0-9._-]+)\/([a-z0-9._-]+)$/i;
+		// 2. GitLab: full URL with at least a namespace and project path segment
+		const gitlabPattern = /^https?:\/\/[^/]+\/[^/]+\/[^/]+/i;
 
-		return githubPattern.test(cleanAddress);
+		return githubPattern.test(cleanAddress) || gitlabPattern.test(cleanAddress);
 	}
 }

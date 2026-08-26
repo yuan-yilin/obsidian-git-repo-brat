@@ -1,4 +1,5 @@
 import { ButtonComponent, Modal, Setting } from "obsidian";
+import { isGitLabRepository, normalizeRepositoryUrl } from "../features/gitlabUtils";
 import { themeSave } from "../features/themes";
 import { getTranslations } from "../i18n";
 import type BratPlugin from "../main";
@@ -26,7 +27,13 @@ export default class AddNewTheme extends Modal {
 	async submitForm(): Promise<void> {
 		const text = getTranslations();
 		if (this.address === "") return;
-		const scrubbedAddress = this.address.replace("https://github.com/", "");
+		const scrubbedAddress = normalizeRepositoryUrl(this.address);
+		// GitHub `user/repo` or a full GitLab repository URL
+		const isGitHub = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(scrubbedAddress);
+		if (!isGitHub && !isGitLabRepository(scrubbedAddress)) {
+			toastMessage(this.plugin, text.addBetaThemeModal.invalidRepository, 10);
+			return;
+		}
 		if (existBetaThemeinInList(this.plugin, scrubbedAddress)) {
 			toastMessage(this.plugin, text.addBetaThemeModal.alreadyInList, 10);
 			return;

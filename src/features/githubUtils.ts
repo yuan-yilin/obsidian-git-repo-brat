@@ -1,13 +1,6 @@
-import {
-	type RequestUrlParam,
-	type RequestUrlResponse,
-	requestUrl,
-} from "obsidian";
+import { type RequestUrlParam, type RequestUrlResponse, requestUrl } from "obsidian";
 import { compare as compareVersions, coerce as semverCoerce } from "semver";
-import {
-	GHRateLimitError,
-	GitHubResponseError,
-} from "../utils/GitHubAPIErrors";
+import { GHRateLimitError, GitHubResponseError } from "../utils/GitHubAPIErrors";
 
 export interface ReleaseVersion {
 	version: string; // The tag name of the release
@@ -67,15 +60,12 @@ export const scrubRepositoryUrl = (address: string): string => {
 };
 
 const TOKEN_PREFIXES = ["ghp_", "github_pat_"];
-const TOKEN_REGEXP =
-	/^(gh[ps]_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59})$/;
+const TOKEN_REGEXP = /^(gh[ps]_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59})$/;
 
 /**
  * Normalizes all keys in an object to lowercase.
  */
-const normalizeHeaders = (
-	headers: Record<string, string>,
-): Record<string, string> => {
+const normalizeHeaders = (headers: Record<string, string>): Record<string, string> => {
 	return Object.keys(headers).reduce(
 		(acc, key) => {
 			acc[key.toLowerCase()] = headers[key];
@@ -93,22 +83,15 @@ const normalizeHeaders = (
  * @param repository - Optional repository name (to be used when validating private repository access)
  * @returns Token information including scopes, permissions, and rate limits
  */
-export const validateGitHubToken = async (
-	personalAccessToken: string,
-	repository?: string,
-): Promise<GitHubTokenInfo> => {
+export const validateGitHubToken = async (personalAccessToken: string, repository?: string): Promise<GitHubTokenInfo> => {
 	// Check scopes & token prefix
 	const validScopes: string[] = ["repo", "public_repo", "metadata=read"];
-	const hasValidPrefix = TOKEN_PREFIXES.some((prefix) =>
-		personalAccessToken.toLowerCase().startsWith(prefix.toLowerCase()),
-	);
+	const hasValidPrefix = TOKEN_PREFIXES.some((prefix) => personalAccessToken.toLowerCase().startsWith(prefix.toLowerCase()));
 	const hasValidFormat = TOKEN_REGEXP.test(personalAccessToken);
 
 	if (!hasValidPrefix || !hasValidFormat) {
 		const error: TokenValidationError = {
-			type: !hasValidPrefix
-				? TokenErrorType.INVALID_PREFIX
-				: TokenErrorType.INVALID_FORMAT,
+			type: !hasValidPrefix ? TokenErrorType.INVALID_PREFIX : TokenErrorType.INVALID_FORMAT,
 			message: "Invalid token format",
 			details: {
 				validPrefixes: TOKEN_PREFIXES,
@@ -135,9 +118,7 @@ export const validateGitHubToken = async (
 	try {
 		// Create a time-based "hash" that's likely an invalid repo in case no repository is given
 		const timestamp = Date.now() % 1000;
-		const repo = repository
-			? repository
-			: `user${timestamp}/repo${timestamp % 100}`;
+		const repo = repository ? repository : `user${timestamp}/repo${timestamp % 100}`;
 		// Use an invalid URL to force an error response with headers
 		await gitHubRequest({
 			url: `https://api.github.com/repos/${repo}`,
@@ -183,17 +164,13 @@ export const validateGitHubToken = async (
 		// Parse accepted permissions from header
 		const rawExpirationDate = headers["github-authentication-token-expiration"];
 		const parsedDate = rawExpirationDate ? new Date(rawExpirationDate) : null;
-		const validDate =
-			parsedDate && !Number.isNaN(parsedDate.getTime())
-				? parsedDate.toISOString()
-				: null;
+		const validDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : null;
 
 		const tokenInfo: GitHubTokenInfo = {
 			validToken: false,
 			currentScopes: headers["x-oauth-scopes"]?.split(", ") ?? [],
 			acceptedScopes: headers["x-accepted-oauth-scopes"]?.split(", ") ?? [],
-			acceptedPermissions:
-				headers["x-accepted-github-permissions"]?.split(", ") ?? [],
+			acceptedPermissions: headers["x-accepted-github-permissions"]?.split(", ") ?? [],
 			expirationDate: validDate,
 			rateLimit: {
 				limit: Number.parseInt(headers["x-ratelimit-limit"] ?? "0", 10),
@@ -210,10 +187,7 @@ export const validateGitHubToken = async (
 		};
 
 		// Check token expiration
-		if (
-			tokenInfo.expirationDate &&
-			new Date(tokenInfo.expirationDate) < new Date()
-		) {
+		if (tokenInfo.expirationDate && new Date(tokenInfo.expirationDate) < new Date()) {
 			tokenInfo.error = {
 				type: TokenErrorType.EXPIRED,
 				message: "Token has expired",
@@ -227,20 +201,14 @@ export const validateGitHubToken = async (
 		// Check scopes
 		const hasValidScope =
 			tokenInfo.currentScopes.some((scope) => validScopes.includes(scope)) ||
-			tokenInfo.acceptedPermissions.some((scope) =>
-				validScopes.includes(scope),
-			);
+			tokenInfo.acceptedPermissions.some((scope) => validScopes.includes(scope));
 
 		if (!hasValidScope) {
 			tokenInfo.error = {
 				type: TokenErrorType.INSUFFICIENT_SCOPE,
-				message:
-					"Token lacks required scopes. Check documentation for requirements.",
+				message: "Token lacks required scopes. Check documentation for requirements.",
 				details: {
-					currentScopes: [
-						...tokenInfo.acceptedScopes,
-						...tokenInfo.acceptedPermissions,
-					],
+					currentScopes: [...tokenInfo.acceptedScopes, ...tokenInfo.acceptedPermissions],
 				},
 			};
 			return tokenInfo;
@@ -251,11 +219,7 @@ export const validateGitHubToken = async (
 	}
 };
 
-export const isPrivateRepo = async (
-	repository: string,
-	debugLogging = true,
-	accessToken = "",
-): Promise<boolean> => {
+export const isPrivateRepo = async (repository: string, debugLogging = true, accessToken = ""): Promise<boolean> => {
 	const URL = `https://api.github.com/repos/${repository}`;
 	try {
 		const response: RequestUrlResponse = await gitHubRequest({
@@ -287,11 +251,7 @@ export const isPrivateRepo = async (
  * @param repository - path to GitHub repository in format USERNAME/repository
  * @returns array of version strings, or null if error
  */
-export const fetchReleaseVersions = async (
-	repository: string,
-	debugLogging = true,
-	accessToken = "",
-): Promise<ReleaseVersion[] | null> => {
+export const fetchReleaseVersions = async (repository: string, debugLogging = true, accessToken = ""): Promise<ReleaseVersion[] | null> => {
 	const apiUrl = `https://api.github.com/repos/${repository}/releases`;
 	try {
 		const response: RequestUrlResponse = await gitHubRequest({
@@ -309,16 +269,12 @@ export const fetchReleaseVersions = async (
 			prerelease: release.prerelease,
 		}));
 	} catch (error) {
-		if (
-			error instanceof GHRateLimitError ||
-			error instanceof GitHubResponseError
-		) {
+		if (error instanceof GHRateLimitError || error instanceof GitHubResponseError) {
 			// Special handling for rate limit errors
 			throw error; // Rethrow rate limit errors
 		}
 
-		if (debugLogging)
-			console.error("Error in fetchReleaseVersions", apiUrl, error);
+		if (debugLogging) console.error("Error in fetchReleaseVersions", apiUrl, error);
 		return null;
 	}
 };
@@ -342,9 +298,7 @@ export const grabReleaseFileFromRepository = async (
 	try {
 		// get the asset based on the asset url in the release
 		// We can use this both for private and public repos
-		const asset = release.assets.find(
-			(asset: { name: string }) => asset.name === fileName,
-		);
+		const asset = release.assets.find((asset: { name: string }) => asset.name === fileName);
 		if (!asset) {
 			return null;
 		}
@@ -370,8 +324,7 @@ export const grabReleaseFileFromRepository = async (
 		if (error instanceof GHRateLimitError) {
 			throw error;
 		}
-		if (debugLogging)
-			console.error("error in grabReleaseFileFromRepository", release, error);
+		if (debugLogging) console.error("error in grabReleaseFileFromRepository", release, error);
 		return null;
 	}
 };
@@ -384,18 +337,13 @@ export interface CommunityPlugin {
 	repo: string;
 }
 
-export const grabCommmunityPluginList = async (
-	debugLogging = true,
-): Promise<CommunityPlugin[] | null> => {
-	const pluginListUrl =
-		"https://raw.githubusercontent.com/obsidianmd/obsidian-releases/HEAD/community-plugins.json";
+export const grabCommmunityPluginList = async (debugLogging = true): Promise<CommunityPlugin[] | null> => {
+	const pluginListUrl = "https://raw.githubusercontent.com/obsidianmd/obsidian-releases/HEAD/community-plugins.json";
 	try {
 		const response: RequestUrlResponse = await requestUrl({
 			url: pluginListUrl,
 		});
-		return response.status === 404
-			? null
-			: (response.json as CommunityPlugin[]);
+		return response.status === 404 ? null : (response.json as CommunityPlugin[]);
 	} catch (error) {
 		if (debugLogging) console.error("error in grabCommmunityPluginList", error);
 		return null;
@@ -408,11 +356,8 @@ export interface CommunityTheme {
 	repo: string;
 }
 
-export const grabCommmunityThemesList = async (
-	debugLogging = true,
-): Promise<CommunityTheme[] | null> => {
-	const themesUrl =
-		"https://raw.githubusercontent.com/obsidianmd/obsidian-releases/HEAD/community-css-themes.json";
+export const grabCommmunityThemesList = async (debugLogging = true): Promise<CommunityTheme[] | null> => {
+	const themesUrl = "https://raw.githubusercontent.com/obsidianmd/obsidian-releases/HEAD/community-css-themes.json";
 	try {
 		const response: RequestUrlResponse = await requestUrl({ url: themesUrl });
 		return response.status === 404 ? null : (response.json as CommunityTheme[]);
@@ -432,23 +377,18 @@ export const grabCommmunityThemeCssFile = async (
 		const response: RequestUrlResponse = await requestUrl({ url: themesUrl });
 		return response.status === 404 ? null : response.text;
 	} catch (error) {
-		if (debugLogging)
-			console.error("error in grabCommmunityThemeCssFile", error);
+		if (debugLogging) console.error("error in grabCommmunityThemeCssFile", error);
 		return null;
 	}
 };
 
-export const grabCommmunityThemeManifestFile = async (
-	repositoryPath: string,
-	debugLogging = true,
-): Promise<string | null> => {
+export const grabCommmunityThemeManifestFile = async (repositoryPath: string, debugLogging = true): Promise<string | null> => {
 	const themesUrl = `https://raw.githubusercontent.com/${repositoryPath}/HEAD/manifest.json`;
 	try {
 		const response: RequestUrlResponse = await requestUrl({ url: themesUrl });
 		return response.status === 404 ? null : response.text;
 	} catch (error) {
-		if (debugLogging)
-			console.error("error in grabCommmunityThemeManifestFile", error);
+		if (debugLogging) console.error("error in grabCommmunityThemeManifestFile", error);
 		return null;
 	}
 };
@@ -465,16 +405,8 @@ export const checksumForString = (str: string): string => {
 	return checksum(str).toString();
 };
 
-export const grabChecksumOfThemeCssFile = async (
-	repositoryPath: string,
-	betaVersion: boolean,
-	debugLogging: boolean,
-): Promise<string> => {
-	const themeCss = await grabCommmunityThemeCssFile(
-		repositoryPath,
-		betaVersion,
-		debugLogging,
-	);
+export const grabChecksumOfThemeCssFile = async (repositoryPath: string, betaVersion: boolean, debugLogging: boolean): Promise<string> => {
+	const themeCss = await grabCommmunityThemeCssFile(repositoryPath, betaVersion, debugLogging);
 	return themeCss ? checksumForString(themeCss) : "0";
 };
 
@@ -496,20 +428,13 @@ export const grabLastCommitInfoForFile = async (
 		const response: RequestUrlResponse = await requestUrl({ url: url });
 		return response.status === 404 ? null : (response.json as CommitInfo[]);
 	} catch (error) {
-		if (debugLogging)
-			console.error("error in grabLastCommitInfoForAFile", error);
+		if (debugLogging) console.error("error in grabLastCommitInfoForAFile", error);
 		return null;
 	}
 };
 
-export const grabLastCommitDateForFile = async (
-	repositoryPath: string,
-	path: string,
-): Promise<string> => {
-	const test: CommitInfo[] | null = await grabLastCommitInfoForFile(
-		repositoryPath,
-		path,
-	);
+export const grabLastCommitDateForFile = async (repositoryPath: string, path: string): Promise<string> => {
+	const test: CommitInfo[] | null = await grabLastCommitInfoForFile(repositoryPath, path);
 	if (test && test.length > 0 && test[0].commit.committer?.date) {
 		return test[0].commit.committer.date;
 	}
@@ -594,10 +519,7 @@ export const grabReleaseFromRepository = async (
 					: [];
 
 		if (debugLogging) {
-			console.error(
-				`grabReleaseFromRepository for ${repositoryPath}:`,
-				releases,
-			);
+			console.error(`grabReleaseFromRepository for ${repositoryPath}:`, releases);
 		}
 		return (
 			releases
@@ -626,16 +548,12 @@ export const grabReleaseFromRepository = async (
 					if (aDate > bDate) return -1;
 					return 0;
 				})
-				.filter((release) => includePrereleases || !release.prerelease)[0] ??
-			null
+				.filter((release) => includePrereleases || !release.prerelease)[0] ?? null
 		);
 	} catch (error) {
 		// Special handling for rate limit errors
 		if (debugLogging) {
-			console.error(
-				`Error in grabReleaseFromRepository for ${repositoryPath}:`,
-				error,
-			);
+			console.error(`Error in grabReleaseFromRepository for ${repositoryPath}:`, error);
 		}
 		throw error; // Rethrow rate limit errors
 	}
@@ -646,10 +564,7 @@ export const grabReleaseFromRepository = async (
  *	@param options - Request options
  *	@param debugLogging - Enable debug logging (default: true)
  */
-export const gitHubRequest = async (
-	options: RequestUrlParam,
-	debugLogging?: true,
-): Promise<RequestUrlResponse> => {
+export const gitHubRequest = async (options: RequestUrlParam, debugLogging?: true): Promise<RequestUrlResponse> => {
 	let limit = 0;
 	let remaining = 0;
 	let reset = 0;
@@ -673,12 +588,7 @@ export const gitHubRequest = async (
 			reset = Number.parseInt(headers["x-ratelimit-reset"], 10);
 		}
 		if (gitHubError.status === 403 && remaining === 0) {
-			const rateLimitError = new GHRateLimitError(
-				limit,
-				remaining,
-				reset,
-				options.url,
-			);
+			const rateLimitError = new GHRateLimitError(limit, remaining, reset, options.url);
 
 			if (debugLogging) {
 				console.error(

@@ -12,20 +12,22 @@ import type {
 } from "obsidian";
 import { PluginSettingTab, requireApiVersion, SecretComponent as SecretComponentClass, Setting, SettingGroup } from "obsidian";
 import { type GitHubTokenInfo, validateGitHubToken } from "../features/githubUtils";
+import { resolveGitLabValidationHost, validateGitLabToken } from "../features/gitlabUtils";
 import { themeDelete } from "../features/themes";
 import { getTranslations } from "../i18n";
 import type BratPlugin from "../main";
 import type { Settings as BratPluginSettings, PluginVersion, ThemeInforamtion } from "../settings";
 import { toastMessage } from "../utils/notifications";
-import { createGitHubResourceLink, createLink } from "../utils/utils";
+import { createLink, createRepositoryLink } from "../utils/utils";
 import AddNewTheme from "./AddNewTheme";
 
 type BratSettingsKey = Extract<keyof BratPluginSettings, string>;
+type TokenPlatform = "github" | "gitlab";
 
 export class BratSettingsTab extends PluginSettingTab {
 	plugin: BratPlugin;
-	accessTokenSetting: SecretComponent | null = null;
-	accessTokenButton: ButtonComponent | null = null;
+	private tokenSettings: Map<TokenPlatform, SecretComponent | null> = new Map();
+	private tokenButtons: Map<TokenPlatform, ButtonComponent | null> = new Map();
 
 	constructor(app: App, plugin: BratPlugin) {
 		super(app, plugin);
@@ -129,7 +131,32 @@ export class BratSettingsTab extends PluginSettingTab {
 							text: text.githubPersonalAccessToken.personalAccessToken.desc.linkText,
 							appendText: text.githubPersonalAccessToken.personalAccessToken.desc.appendText,
 						}),
-						render: (setting) => this.renderPersonalAccessTokenSetting(setting),
+						render: (setting) => this.renderTokenSetting(setting, "github"),
+					},
+				],
+			},
+			{
+				type: "group",
+				heading: text.gitlabSection.heading,
+				items: [
+					{
+						name: text.gitlabSection.host.name,
+						desc: text.gitlabSection.host.desc,
+						control: {
+							type: "text",
+							key: "gitlabHost",
+							placeholder: text.gitlabSection.host.placeholder,
+						},
+					},
+					{
+						name: text.gitlabSection.personalAccessToken.name,
+						desc: createLink({
+							prependText: text.gitlabSection.personalAccessToken.desc.prependText,
+							url: "https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html",
+							text: text.gitlabSection.personalAccessToken.desc.linkText,
+							appendText: text.gitlabSection.personalAccessToken.desc.appendText,
+						}),
+						render: (setting) => this.renderTokenSetting(setting, "gitlab"),
 					},
 				],
 			},
@@ -249,7 +276,7 @@ export class BratSettingsTab extends PluginSettingTab {
 					});
 				}
 
-				pluginSettingContainer.setName(createGitHubResourceLink(p)).setDesc(pluginDescription);
+				pluginSettingContainer.setName(createRepositoryLink(p)).setDesc(pluginDescription);
 
 				const containerElement = pluginSettingContainer.settingEl;
 				containerElement.addClass("brat-plugin-item");
@@ -360,7 +387,7 @@ export class BratSettingsTab extends PluginSettingTab {
 
 		for (const bp of this.plugin.settings.themesList) {
 			betaThemeGroup.addSetting((themeSettingContainer) => {
-				themeSettingContainer.setName(createGitHubResourceLink(bp.repo));
+				themeSettingContainer.setName(createRepositoryLink(bp.repo));
 
 				const containerElement = themeSettingContainer.settingEl;
 				containerElement.addClass("brat-theme-item");
@@ -464,8 +491,6 @@ export class BratSettingsTab extends PluginSettingTab {
 
 		// Personal access token setting
 		const tokenSection = new SettingGroup(containerEl).setHeading(text.githubPersonalAccessToken.heading);
-
-		let currentTokenValue = "";
 		tokenSection.addSetting((tokenSetting) => {
 			tokenSetting.setName(text.githubPersonalAccessToken.personalAccessToken.name).setDesc(
 				createLink({
@@ -475,61 +500,34 @@ export class BratSettingsTab extends PluginSettingTab {
 					appendText: text.githubPersonalAccessToken.personalAccessToken.desc.appendText,
 				}),
 			);
+			this.attachTokenSettingControls(tokenSetting, "github");
+		});
 
-			// Create SecretComponent - displays secret NAME selector
-			this.accessTokenSetting = new SecretComponentClass(this.plugin.app, tokenSetting.controlEl);
-
-			// Set the component to show the current secret name from settings
-			this.accessTokenSetting.setValue(this.plugin.settings.globalTokenName || "").onChange((secretName: string | null) => {
-				void (async () => {
-					// secretName is the NAME of the secret, not the value (can be null when cleared)
-					const normalizedName = secretName?.trim() || "";
-					this.plugin.settings.globalTokenName = normalizedName;
-					await this.plugin.saveSettings();
-
-					// Get the actual token value for validation
-					if (normalizedName) {
-						currentTokenValue = this.plugin.app.secretStorage.getSecret(normalizedName) || "";
-						await this.validateGlobalTokenAndUpdateButton(currentTokenValue);
-					} else {
-						currentTokenValue = "";
-						await this.validateGlobalTokenAndUpdateButton("");
-					}
-				})();
-			});
-
-			// Get initial token value for validation
-			if (this.plugin.settings.globalTokenName) {
-				currentTokenValue = this.plugin.app.secretStorage.getSecret(this.plugin.settings.globalTokenName) || "";
-			}
-
-			tokenSetting
-				.addExtraButton((cb: ExtraButtonComponent) => {
-					cb.setIcon("cross")
-						.setTooltip(text.githubPersonalAccessToken.clearPersonalAccessToken)
-						.onClick(async () => {
-							this.plugin.settings.globalTokenName = "";
-							await this.plugin.saveSettings();
-							this.accessTokenSetting?.setValue("");
-							currentTokenValue = "";
-							await this.validateGlobalTokenAndUpdateButton("");
+		// GitLab host + token setting
+		const gitlabSection = new SettingGroup(containerEl).setHeading(text.gitlabSection.heading);
+		gitlabSection.addSetting((hostSetting) => {
+			hostSetting
+				.setName(text.gitlabSection.host.name)
+				.setDesc(text.gitlabSection.host.desc)
+				.addSearch((cb) => {
+					cb.setPlaceholder(text.gitlabSection.host.placeholder)
+						.setValue(this.plugin.settings.gitlabHost || "")
+						.onChange((newHost: string) => {
+							this.plugin.settings.gitlabHost = newHost.trim();
+							void this.plugin.saveSettings();
 						});
-				})
-				.addButton((btn: ButtonComponent) => {
-					this.accessTokenButton = btn;
-
-					btn
-						.setButtonText(text.githubPersonalAccessToken.validate)
-						.setCta()
-						.onClick(async () => {
-							if (currentTokenValue) {
-								await this.validateGlobalTokenAndUpdateButton(currentTokenValue);
-							}
-						});
-				})
-				.then(() => {
-					void this.validateGlobalTokenAndUpdateButton(currentTokenValue);
 				});
+		});
+		gitlabSection.addSetting((gitlabTokenSetting) => {
+			gitlabTokenSetting.setName(text.gitlabSection.personalAccessToken.name).setDesc(
+				createLink({
+					prependText: text.gitlabSection.personalAccessToken.desc.prependText,
+					url: "https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html",
+					text: text.gitlabSection.personalAccessToken.desc.linkText,
+					appendText: text.gitlabSection.personalAccessToken.desc.appendText,
+				}),
+			);
+			this.attachTokenSettingControls(gitlabTokenSetting, "gitlab");
 		});
 	}
 
@@ -662,7 +660,7 @@ export class BratSettingsTab extends PluginSettingTab {
 		const secretValue = secretName ? this.plugin.app.secretStorage.getSecret(secretName) : "";
 		const isSecretMissing = Boolean(secretName && !secretValue);
 
-		setting.setName(createGitHubResourceLink(repository)).setDesc(this.createTrackedPluginDescriptionFragment(trackedPlugin));
+		setting.setName(createRepositoryLink(repository)).setDesc(this.createTrackedPluginDescriptionFragment(trackedPlugin));
 		setting.settingEl.addClass("brat-plugin-item");
 
 		setting.addExtraButton((btn: ExtraButtonComponent) => {
@@ -726,7 +724,7 @@ export class BratSettingsTab extends PluginSettingTab {
 
 	private renderTrackedThemeSetting(setting: Setting, theme: ThemeInforamtion): void {
 		const text = getTranslations().settings.betaThemeList;
-		setting.setName(createGitHubResourceLink(theme.repo));
+		setting.setName(createRepositoryLink(theme.repo));
 		setting.settingEl.addClass("brat-theme-item");
 		setting.addExtraButton((btn: ExtraButtonComponent) => {
 			btn
@@ -753,30 +751,56 @@ export class BratSettingsTab extends PluginSettingTab {
 		});
 	}
 
-	private renderPersonalAccessTokenSetting(setting: Setting): () => void {
-		const text = getTranslations().settings.githubPersonalAccessToken;
+	private renderTokenSetting(setting: Setting, platform: TokenPlatform): () => void {
+		this.attachTokenSettingControls(setting, platform);
+		return () => {
+			this.tokenSettings.set(platform, null);
+			this.tokenButtons.set(platform, null);
+		};
+	}
+
+	private tokenSettingKey(platform: TokenPlatform): "globalTokenName" | "gitlabTokenName" {
+		return platform === "gitlab" ? "gitlabTokenName" : "globalTokenName";
+	}
+
+	private tokenSettingText(platform: TokenPlatform) {
+		return platform === "gitlab" ? getTranslations().settings.gitlabSection : getTranslations().settings.githubPersonalAccessToken;
+	}
+
+	/**
+	 * Attaches the secret-selector, clear and validate controls for a platform
+	 * token to the given setting. Used by both the declarative and legacy paths.
+	 */
+	private attachTokenSettingControls(setting: Setting, platform: TokenPlatform): void {
+		const text = this.tokenSettingText(platform);
+		const settingKey = this.tokenSettingKey(platform);
 		let currentTokenValue = "";
 
-		this.accessTokenSetting = new SecretComponentClass(this.plugin.app, setting.controlEl);
+		// Create SecretComponent - displays secret NAME selector
+		const secretComponent = new SecretComponentClass(this.plugin.app, setting.controlEl);
+		this.tokenSettings.set(platform, secretComponent);
 
-		this.accessTokenSetting.setValue(this.plugin.settings.globalTokenName || "").onChange((secretName: string | null) => {
+		secretComponent.setValue(this.plugin.settings[settingKey] || "").onChange((secretName: string | null) => {
 			void (async () => {
+				// secretName is the NAME of the secret, not the value (can be null when cleared)
 				const normalizedName = secretName?.trim() || "";
-				this.plugin.settings.globalTokenName = normalizedName;
+				this.plugin.settings[settingKey] = normalizedName;
 				await this.plugin.saveSettings();
 
+				// Get the actual token value for validation
 				if (normalizedName) {
 					currentTokenValue = this.plugin.app.secretStorage.getSecret(normalizedName) || "";
-					await this.validateGlobalTokenAndUpdateButton(currentTokenValue);
+					await this.validateTokenAndUpdateButton(currentTokenValue, platform);
 				} else {
 					currentTokenValue = "";
-					await this.validateGlobalTokenAndUpdateButton("");
+					await this.validateTokenAndUpdateButton("", platform);
 				}
 			})();
 		});
 
-		if (this.plugin.settings.globalTokenName) {
-			currentTokenValue = this.plugin.app.secretStorage.getSecret(this.plugin.settings.globalTokenName) || "";
+		// Get initial token value for validation
+		if (this.plugin.settings[settingKey]) {
+			currentTokenValue = this.plugin.app.secretStorage.getSecret(this.plugin.settings[settingKey]) || "";
 		}
 
 		setting
@@ -784,32 +808,28 @@ export class BratSettingsTab extends PluginSettingTab {
 				cb.setIcon("cross")
 					.setTooltip(text.clearPersonalAccessToken)
 					.onClick(async () => {
-						this.plugin.settings.globalTokenName = "";
+						this.plugin.settings[settingKey] = "";
 						await this.plugin.saveSettings();
-						this.accessTokenSetting?.setValue("");
+						secretComponent.setValue("");
 						currentTokenValue = "";
-						await this.validateGlobalTokenAndUpdateButton("");
+						await this.validateTokenAndUpdateButton("", platform);
 					});
 			})
 			.addButton((btn: ButtonComponent) => {
-				this.accessTokenButton = btn;
+				this.tokenButtons.set(platform, btn);
+
 				btn
 					.setButtonText(text.validate)
 					.setCta()
 					.onClick(async () => {
 						if (currentTokenValue) {
-							await this.validateGlobalTokenAndUpdateButton(currentTokenValue);
+							await this.validateTokenAndUpdateButton(currentTokenValue, platform);
 						}
 					});
 			})
 			.then(() => {
-				void this.validateGlobalTokenAndUpdateButton(currentTokenValue);
+				void this.validateTokenAndUpdateButton(currentTokenValue, platform);
 			});
-
-		return () => {
-			this.accessTokenSetting = null;
-			this.accessTokenButton = null;
-		};
 	}
 
 	private createListSearch(placeholder: string): SettingDefinitionGroup<BratSettingsKey>["search"] | undefined {
@@ -832,20 +852,54 @@ export class BratSettingsTab extends PluginSettingTab {
 		};
 	}
 
-	private async validateGlobalTokenAndUpdateButton(token: string): Promise<boolean> {
-		if (!this.accessTokenButton) {
+	private async validateTokenAndUpdateButton(token: string, platform: TokenPlatform): Promise<boolean> {
+		const validateButton = this.tokenButtons.get(platform);
+		if (!validateButton) {
 			return false;
 		}
 
 		const text = getTranslations();
-		const validateButton = this.accessTokenButton;
+		const platformText = this.tokenSettingText(platform);
 		validateButton.buttonEl.removeClass("mod-warning");
 		validateButton.setTooltip("");
 
 		if (!token) {
-			validateButton.setButtonText(text.settings.githubPersonalAccessToken.validate);
+			validateButton.setButtonText(platformText.validate);
 			validateButton.setDisabled(true);
 			return false;
+		}
+
+		if (platform === "gitlab") {
+			const host = resolveGitLabValidationHost(this.plugin.settings, this.plugin.settings.pluginList);
+			if (!host) {
+				validateButton.setButtonText(text.addBetaPluginModal.buttons.invalid);
+				validateButton.buttonEl.addClass("mod-warning");
+				validateButton.setDisabled(false);
+				validateButton.setTooltip(getTranslations().settings.gitlabSection.noHostConfigured);
+				return false;
+			}
+			try {
+				const tokenInfo = await validateGitLabToken(token, host);
+				if (tokenInfo.validToken) {
+					validateButton.setButtonText(text.addBetaPluginModal.buttons.valid).setCta();
+					validateButton.setDisabled(true);
+					validateButton.setTooltip(tokenInfo.userName ? `Valid token — user: ${tokenInfo.userName}` : "Valid token");
+					return true;
+				}
+
+				validateButton.setButtonText(text.addBetaPluginModal.buttons.invalid);
+				validateButton.buttonEl.addClass("mod-warning");
+				validateButton.setDisabled(false);
+				validateButton.setTooltip(tokenInfo.error.message);
+				return false;
+			} catch (error) {
+				console.error("GitLab token validation error:", error);
+				validateButton.setButtonText(text.addBetaPluginModal.buttons.invalid);
+				validateButton.buttonEl.addClass("mod-warning");
+				validateButton.setDisabled(false);
+				validateButton.setTooltip("Failed to validate token");
+				return false;
+			}
 		}
 
 		try {

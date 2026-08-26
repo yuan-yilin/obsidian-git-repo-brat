@@ -15,8 +15,8 @@ import { logger } from "./utils/logging";
 import { toastMessage } from "./utils/notifications";
 
 export default class BratPlugin extends Plugin {
-	APP_NAME = "BRAT";
-	APP_ID = "obsidian42-brat";
+	APP_NAME = "GitLab BRAT";
+	APP_ID = "gitlab-brat";
 	settings: Settings = DEFAULT_SETTINGS;
 	settingsTab: BratSettingsTab = new BratSettingsTab(this.app, this);
 	betaPlugins = new BetaPlugins(this);

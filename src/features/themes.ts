@@ -3,15 +3,17 @@ import { Notice, normalizePath } from "obsidian";
 import { getTranslations } from "../i18n";
 import type BratPlugin from "../main";
 import { addBetaThemeToList, updateBetaThemeLastUpdateChecksum } from "../settings";
-import { isConnectedToInternet } from "../utils/internetconnection";
+import { isConnectedToInternet, isHostReachable } from "../utils/internetconnection";
 import { toastMessage } from "../utils/notifications";
+import { repositoryUrl } from "../utils/utils";
 import { checksumForString, grabChecksumOfThemeCssFile, grabCommmunityThemeCssFile, grabCommmunityThemeManifestFile } from "./githubUtils";
+import { grabGitLabRawFile, isGitLabRepository, parseGitLabRepository, resolveGitLabTokenValue } from "./gitlabUtils";
 
 /**
  * Installs or updates a theme
  *
  * @param plugin              - ThePlugin
- * @param cssGithubRepository - The repository with the theme
+ * @param cssGithubRepository - The repository with the theme (GitHub `user/repo` or GitLab full URL)
  * @param newInstall          - true = New theme install, false update the theme
  *
  * @returns true for succcess
@@ -19,16 +21,45 @@ import { checksumForString, grabChecksumOfThemeCssFile, grabCommmunityThemeCssFi
 export const themeSave = async (plugin: BratPlugin, cssGithubRepository: string, newInstall: boolean): Promise<boolean> => {
 	const text = getTranslations().themeMessages;
 	// test for themes-beta.css
-	let themeCss = await grabCommmunityThemeCssFile(cssGithubRepository, true, plugin.settings.debuggingMode);
-	// grabe themes.css if no beta
-	if (!themeCss) themeCss = await grabCommmunityThemeCssFile(cssGithubRepository, false, plugin.settings.debuggingMode);
+	let themeCss: string | null = null;
+	let themeManifest: string | null = null;
 
-	if (!themeCss) {
-		toastMessage(plugin, text.noThemeCssFile);
-		return false;
+	if (isGitLabRepository(cssGithubRepository)) {
+		// GitLab themes come from the repository's default branch via the raw file API.
+		// Themes have no per-repo token mechanism, the global GitLab token is used.
+		const token = resolveGitLabTokenValue(plugin.app, plugin.settings);
+		try {
+			themeCss = await grabGitLabRawFile(cssGithubRepository, "theme-beta.css", "HEAD", token, plugin.settings.debuggingMode);
+			// grab theme.css if no beta
+			if (!themeCss) themeCss = await grabGitLabRawFile(cssGithubRepository, "theme.css", "HEAD", token, plugin.settings.debuggingMode);
+
+			if (!themeCss) {
+				toastMessage(plugin, text.noThemeCssFile);
+				return false;
+			}
+
+			themeManifest = await grabGitLabRawFile(cssGithubRepository, "manifest.json", "HEAD", token, plugin.settings.debuggingMode);
+		} catch (error) {
+			// 401/403: the token is missing or rejected — without a valid token an
+			// internal/private project simply looks like "file not found", which
+			// would produce a misleading "no theme.css" error.
+			console.error("BRAT: GitLab theme fetch failed", cssGithubRepository, error);
+			toastMessage(plugin, text.gitlabTokenError, 10);
+			return false;
+		}
+	} else {
+		themeCss = await grabCommmunityThemeCssFile(cssGithubRepository, true, plugin.settings.debuggingMode);
+		// grabe themes.css if no beta
+		if (!themeCss) themeCss = await grabCommmunityThemeCssFile(cssGithubRepository, false, plugin.settings.debuggingMode);
+
+		if (!themeCss) {
+			toastMessage(plugin, text.noThemeCssFile);
+			return false;
+		}
+
+		themeManifest = await grabCommmunityThemeManifestFile(cssGithubRepository, plugin.settings.debuggingMode);
 	}
 
-	const themeManifest = await grabCommmunityThemeManifestFile(cssGithubRepository, plugin.settings.debuggingMode);
 	if (!themeManifest) {
 		toastMessage(plugin, text.noManifestFile);
 		return false;
@@ -58,9 +89,9 @@ export const themeSave = async (plugin: BratPlugin, cssGithubRepository: string,
 		msg = text.updated(manifestInfo.name, cssGithubRepository);
 	}
 
-	void plugin.log(`${msg}[Theme Info](https://github.com/${cssGithubRepository})`, false);
+	void plugin.log(`${msg}[Theme Info](${repositoryUrl(cssGithubRepository)})`, false);
 	toastMessage(plugin, msg, 20, (): void => {
-		window.open(`https://github.com/${cssGithubRepository}`);
+		window.open(repositoryUrl(cssGithubRepository));
 	});
 	return true;
 };
@@ -73,19 +104,29 @@ export const themeSave = async (plugin: BratPlugin, cssGithubRepository: string,
  *
  */
 export const themesCheckAndUpdates = async (plugin: BratPlugin, showInfo: boolean): Promise<void> => {
-	if (!(await isConnectedToInternet())) {
-		console.debug("BRAT: No internet detected.");
-		return;
-	}
+	// Per-host reachability: GitHub relies on the general internet check, GitLab
+	// instances are probed directly so intranet-only setups still update.
+	const reachability = new Map<string, boolean>();
+	const isRepoReachable = async (repo: string): Promise<boolean> => {
+		const key = isGitLabRepository(repo) ? (parseGitLabRepository(repo)?.baseUrl ?? "") : "__github__";
+		if (!reachability.has(key)) {
+			reachability.set(key, key === "__github__" ? await isConnectedToInternet() : await isHostReachable(key));
+		}
+		return reachability.get(key) ?? false;
+	};
+
 	let newNotice: Notice | undefined;
 	const msg1 = "Checking for beta theme updates STARTED";
 	await plugin.log(msg1, true);
 	if (showInfo && plugin.settings.notificationsEnabled) newNotice = new Notice(`BRAT\n${msg1}`, 30000);
 	for (const t of plugin.settings.themesList) {
-		// first test to see if theme-beta.css exists
-		let lastUpdateOnline = await grabChecksumOfThemeCssFile(t.repo, true, plugin.settings.debuggingMode);
-		// if theme-beta.css does NOT exist, try to get theme.css
-		if (lastUpdateOnline === "0") lastUpdateOnline = await grabChecksumOfThemeCssFile(t.repo, false, plugin.settings.debuggingMode);
+		if (!(await isRepoReachable(t.repo))) {
+			console.debug(`BRAT: host unreachable, skipping theme ${t.repo}`);
+			continue;
+		}
+		const lastUpdateOnline = isGitLabRepository(t.repo)
+			? await grabGitLabThemeChecksum(plugin, t.repo)
+			: await grabGitHubThemeChecksum(plugin, t.repo);
 		console.debug("BRAT: lastUpdateOnline", lastUpdateOnline);
 		if (lastUpdateOnline !== t.lastUpdate) await themeSave(plugin, t.repo, false);
 	}
@@ -95,6 +136,27 @@ export const themesCheckAndUpdates = async (plugin: BratPlugin, showInfo: boolea
 		if (plugin.settings.notificationsEnabled && newNotice) newNotice.hide();
 		toastMessage(plugin, msg2);
 	}
+};
+
+/**
+ * Computes the checksum of a GitHub theme's css file (beta variant first).
+ */
+const grabGitHubThemeChecksum = async (plugin: BratPlugin, repo: string): Promise<string> => {
+	// first test to see if theme-beta.css exists
+	let lastUpdateOnline = await grabChecksumOfThemeCssFile(repo, true, plugin.settings.debuggingMode);
+	// if theme-beta.css does NOT exist, try to get theme.css
+	if (lastUpdateOnline === "0") lastUpdateOnline = await grabChecksumOfThemeCssFile(repo, false, plugin.settings.debuggingMode);
+	return lastUpdateOnline;
+};
+
+/**
+ * Computes the checksum of a GitLab theme's css file (beta variant first).
+ */
+const grabGitLabThemeChecksum = async (plugin: BratPlugin, repo: string): Promise<string> => {
+	const token = resolveGitLabTokenValue(plugin.app, plugin.settings);
+	let themeCss = await grabGitLabRawFile(repo, "theme-beta.css", "HEAD", token, plugin.settings.debuggingMode);
+	if (!themeCss) themeCss = await grabGitLabRawFile(repo, "theme.css", "HEAD", token, plugin.settings.debuggingMode);
+	return themeCss ? checksumForString(themeCss) : "0";
 };
 
 /**
