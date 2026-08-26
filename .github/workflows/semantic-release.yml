@@ -63,6 +63,8 @@ jobs:
           git push
 
       - name: Generate artifact attestation (main release)
+        # Best-effort: OIDC attestations are not available on fork repositories
+        continue-on-error: true
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/attest@v4
         with:
