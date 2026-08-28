@@ -1,14 +1,11 @@
 {
     "id": "git-repo-brat",
     "name": "Git Repo BRAT",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "minAppVersion": "1.11.4",
     "description": "Easily install plugin beta versions for testing from GitHub and GitLab.",
-    "author": "TfTHacker",
-    "authorUrl": "https://github.com/TfTHacker",
-    "helpUrl": "https://tfthacker.com/BRAT",
-    "isDesktopOnly": false,
-    "fundingUrl": {
-        "Visit my site": "https://tfthacker.com"
-    }
+    "author": "yuan-yilin",
+    "authorUrl": "https://github.com/yuan-yilin",
+    "helpUrl": "https://github.com/yuan-yilin/obsidian-gitlab-brat",
+    "isDesktopOnly": false
 }
