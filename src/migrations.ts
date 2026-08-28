@@ -9,7 +9,7 @@ interface MigrationLog {
 }
 
 const MIGRATION_LOG_KEY = "brat-migrations";
-const PLUGIN_FOLDER = "gitlab-brat";
+const PLUGIN_FOLDER = "git-repo-brat";
 
 /**
  * Checks if a migration has already been applied

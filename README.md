@@ -1,6 +1,6 @@
 ![](media/brat.jpg)
 
-# GitLab BRAT - Beta Reviewers Auto-update Tester
+# Git Repo BRAT - Beta Reviewers Auto-update Tester
 
 This is a fork of [TfTHacker's BRAT](https://github.com/TfTHacker/obsidian42-brat) with GitLab support: it installs and updates Obsidian **plugins and themes from both GitHub and GitLab**.
 
@@ -19,7 +19,7 @@ GitLab projects that are internal or private require a personal access token:
 
 1. Create a token in your GitLab instance under **User Settings → Access Tokens** with the `read_api` scope.
 2. In Obsidian, add the token to Obsidian's secrets (Settings → Secrets / or via the plugin's token picker).
-3. In **Settings → GitLab BRAT**, set the **GitLab host** (e.g. `http://gitlab.example.com`) and select the token, then click **Validate**.
+3. In **Settings → Git Repo BRAT**, set the **GitLab host** (e.g. `http://gitlab.example.com`) and select the token, then click **Validate**.
 
 Tokens are stored in Obsidian's per-device secret storage, so each device needs to be configured once. Publicly visible projects work without a token.
 

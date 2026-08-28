@@ -1,7 +1,7 @@
 {
-    "id": "gitlab-brat",
-    "name": "GitLab BRAT",
-    "version": "1.0.0",
+    "id": "git-repo-brat",
+    "name": "Git Repo BRAT",
+    "version": "1.0.1",
     "minAppVersion": "1.11.4",
     "description": "Easily install plugin beta versions for testing from GitHub and GitLab.",
     "author": "TfTHacker",

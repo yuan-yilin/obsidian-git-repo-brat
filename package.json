@@ -1,5 +1,5 @@
 {
-  "name": "gitlab-brat",
+  "name": "git-repo-brat",
   "version": "0.0.0",
   "description": "Beta Reviewer's Auto-update Tool with GitLab support.",
   "main": "main.js",

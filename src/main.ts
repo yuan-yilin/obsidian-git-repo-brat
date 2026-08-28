@@ -15,8 +15,8 @@ import { logger } from "./utils/logging";
 import { toastMessage } from "./utils/notifications";
 
 export default class BratPlugin extends Plugin {
-	APP_NAME = "GitLab BRAT";
-	APP_ID = "gitlab-brat";
+	APP_NAME = "Git Repo BRAT";
+	APP_ID = "git-repo-brat";
 	settings: Settings = DEFAULT_SETTINGS;
 	settingsTab: BratSettingsTab = new BratSettingsTab(this.app, this);
 	betaPlugins = new BetaPlugins(this);
