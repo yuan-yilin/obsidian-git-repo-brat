@@ -3,7 +3,7 @@
     "name": "Git Repo BRAT",
     "version": "1.0.2",
     "minAppVersion": "1.11.4",
-    "description": "Easily install plugin beta versions for testing from GitHub and GitLab.",
+    "description": "Easily install plugin beta versions for testing from git repo.",
     "author": "yuan-yilin",
     "authorUrl": "https://github.com/yuan-yilin",
     "helpUrl": "https://github.com/yuan-yilin/obsidian-gitlab-brat",
